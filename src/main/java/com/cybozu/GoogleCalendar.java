@@ -10,6 +10,7 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.TimeZone;
+import java.util.concurrent.TimeUnit;
 
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp;
@@ -62,8 +63,18 @@ public class GoogleCalendar {
 		String id = null;
 
 		Event googleSchedule = new Event();
-		googleSchedule.setStart(new EventDateTime().setTimeZone(timezone.getID()).setDateTime(new DateTime(start)));
-		googleSchedule.setEnd(new EventDateTime().setTimeZone(timezone.getID()).setDateTime(new DateTime(end)));
+
+		if (isAllDay(start, end, timezone)) {
+			// The date, in the format "yyyy-mm-dd", if this is an all-day event.
+			// https://developers.google.com/resources/api-libraries/documentation/calendar/v3/java/latest/com/google/api/services/calendar/model/EventDateTime.html#setDate(com.google.api.client.util.DateTime)
+			SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd");
+			fmt.setTimeZone(timezone);
+			googleSchedule.setStart(new EventDateTime().setTimeZone(timezone.getID()).setDate(new DateTime(fmt.format(start))));
+			googleSchedule.setEnd(new EventDateTime().setTimeZone(timezone.getID()).setDate(new DateTime(fmt.format(end))));
+		} else {
+			googleSchedule.setStart(new EventDateTime().setTimeZone(timezone.getID()).setDateTime(new DateTime(start)));
+			googleSchedule.setEnd(new EventDateTime().setTimeZone(timezone.getID()).setDateTime(new DateTime(start)));
+		}
 		googleSchedule.setRecurrence(null);
 		googleSchedule.setSummary(title.trim());
 		googleSchedule.setDescription(description.trim());
@@ -217,6 +228,24 @@ public class GoogleCalendar {
             .setServiceAccountScopes(SCOPES)
             .setServiceAccountPrivateKeyFromP12File(new File(P12key))
             .build();
+	}
+
+	/**
+	 * 終日予定かどうかを判定
+	 *
+	 * @param start 開始日時
+	 * @param end 終了日時
+	 * @param timeZone タイムゾーン
+	 * @return 終日予定の場合はtrue
+	 */
+	private boolean isAllDay(Date start, Date end, TimeZone timeZone) {
+		java.util.Calendar cal = java.util.Calendar.getInstance(timeZone);
+		cal.setTime(start);
+		if (cal.get(java.util.Calendar.HOUR_OF_DAY) != 0
+			|| cal.get(java.util.Calendar.MINUTE) != 0) {
+			return false;
+		}
+		return (end.getTime() - start.getTime()) % TimeUnit.DAYS.toMillis(1) == 0;
 	}
 
 	/**
